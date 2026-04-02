@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -16,6 +18,18 @@ from gtfs_parquet.schema import ALL_SCHEMAS, GtfsFileSchema, date_columns, time_
 # ---------------------------------------------------------------------------
 
 
+def _prepare_table(name: str, df: pl.DataFrame, compression: str, compression_level: int) -> bytes:
+    """Sort a table by its schema sort keys and serialise to Parquet bytes."""
+    schema = ALL_SCHEMAS.get(name)
+    if schema and schema.sort_keys:
+        keys = [k for k in schema.sort_keys if k in df.columns]
+        if keys:
+            df = df.sort(keys)
+    buf = io.BytesIO()
+    df.write_parquet(buf, compression=compression, compression_level=compression_level)
+    return buf.getvalue()
+
+
 def write_parquet(
     feed: Feed,
     path: str | Path,
@@ -23,50 +37,93 @@ def write_parquet(
     compression: str = "zstd",
     compression_level: int = 9,
 ) -> None:
-    """Write all Feed tables as individual Parquet files in a directory.
+    """Write all Feed tables as Parquet.
 
-    Tables are sorted by their schema's :attr:`~gtfs_parquet.schema.GtfsFileSchema.sort_keys`
-    before writing to improve compression via Parquet's internal encodings.
+    The output format is determined by the file extension of *path*:
+
+    * **directory** (no extension / existing dir) — one ``.parquet`` file per table.
+    * **``.zip``** — a zip archive of ``.parquet`` files (stored without
+      extra compression since Parquet already uses *compression* internally).
+    * **``.tar``** — a tar archive of ``.parquet`` files (no extra
+      compression, single-file distribution).
+
+    Tables are sorted by their schema's
+    :attr:`~gtfs_parquet.schema.GtfsFileSchema.sort_keys` before writing.
 
     Args:
         feed: The feed to write.
-        path: Output directory (created if it does not exist).
+        path: Output path (directory, ``.zip``, or ``.tar``).
         compression: Parquet compression codec.
         compression_level: Compression level for the chosen codec.
     """
     path = Path(path)
-    path.mkdir(parents=True, exist_ok=True)
-    for name, df in feed.tables().items():
-        schema = ALL_SCHEMAS.get(name)
-        if schema and schema.sort_keys:
-            # Only sort by keys that actually exist in the DataFrame.
-            keys = [k for k in schema.sort_keys if k in df.columns]
-            if keys:
-                df = df.sort(keys)
-        df.write_parquet(
-            path / f"{name}.parquet",
-            compression=compression,
-            compression_level=compression_level,
-        )
+    suffix = path.suffix.lower()
+
+    if suffix == ".zip":
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED) as zf:
+            for name, df in feed.tables().items():
+                data = _prepare_table(name, df, compression, compression_level)
+                zf.writestr(f"{name}.parquet", data)
+
+    elif suffix == ".tar":
+        with tarfile.open(path, "w") as tf:
+            for name, df in feed.tables().items():
+                data = _prepare_table(name, df, compression, compression_level)
+                info = tarfile.TarInfo(name=f"{name}.parquet")
+                info.size = len(data)
+                tf.addfile(info, io.BytesIO(data))
+
+    else:
+        # Default: directory of parquet files.
+        path.mkdir(parents=True, exist_ok=True)
+        for name, df in feed.tables().items():
+            data = _prepare_table(name, df, compression, compression_level)
+            (path / f"{name}.parquet").write_bytes(data)
 
 
 def read_parquet(path: str | Path) -> Feed:
-    """Read a directory of Parquet files back into a Feed.
+    """Read Parquet tables back into a Feed.
 
-    Each ``.parquet`` file whose stem matches a Feed attribute is loaded.
+    Accepts a directory, ``.zip`` archive, or ``.tar`` archive of
+    ``.parquet`` files.
 
     Args:
-        path: Directory containing the Parquet files.
+        path: Path to the directory, zip, or tar containing Parquet files.
 
     Returns:
         A populated :class:`~gtfs_parquet.feed.Feed`.
     """
     path = Path(path)
+    suffix = path.suffix.lower()
     feed = Feed()
-    for pq_file in path.glob("*.parquet"):
-        table_name = pq_file.stem
-        if hasattr(feed, table_name):
-            setattr(feed, table_name, pl.read_parquet(pq_file))
+
+    if suffix == ".zip":
+        with zipfile.ZipFile(path, "r") as zf:
+            for entry in zf.namelist():
+                if not entry.endswith(".parquet"):
+                    continue
+                table_name = Path(entry).stem
+                if hasattr(feed, table_name):
+                    setattr(feed, table_name, pl.read_parquet(io.BytesIO(zf.read(entry))))
+
+    elif suffix == ".tar":
+        with tarfile.open(path, "r") as tf:
+            for member in tf.getmembers():
+                if not member.name.endswith(".parquet"):
+                    continue
+                table_name = Path(member.name).stem
+                if hasattr(feed, table_name):
+                    f = tf.extractfile(member)
+                    if f is not None:
+                        setattr(feed, table_name, pl.read_parquet(io.BytesIO(f.read())))
+
+    else:
+        # Default: directory of parquet files.
+        for pq_file in path.glob("*.parquet"):
+            table_name = pq_file.stem
+            if hasattr(feed, table_name):
+                setattr(feed, table_name, pl.read_parquet(pq_file))
+
     return feed
 
 

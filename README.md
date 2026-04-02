@@ -24,11 +24,15 @@ from gtfs_parquet import parse_gtfs, write_parquet, read_parquet, write_gtfs
 # Parse a GTFS zip (local path or URL)
 feed = parse_gtfs("gtfs.zip")
 
-# Write to Parquet directory
-write_parquet(feed, "output/")
+# Write to Parquet — directory, .zip, or .tar (auto-detected by extension)
+write_parquet(feed, "output/")           # directory of .parquet files
+write_parquet(feed, "output.zip")        # zip archive (no extra compression)
+write_parquet(feed, "output.tar")        # tar archive (single file, no extra compression)
 
-# Read back
+# Read back (same formats)
 feed = read_parquet("output/")
+feed = read_parquet("output.zip")
+feed = read_parquet("output.tar")
 
 # Convert back to GTFS zip
 write_gtfs(feed, "roundtrip.zip")

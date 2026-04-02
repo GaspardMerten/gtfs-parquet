@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import polars as pl
@@ -11,26 +12,38 @@ from gtfs_parquet import Feed, parse_gtfs, parse_gtfs_zip, read_parquet, write_g
 
 
 # ---------------------------------------------------------------------------
-# Fixtures: download real GTFS feeds once per session
+# Fixtures: locate real GTFS feeds from GTFS_FEED_DIR or download once
 # ---------------------------------------------------------------------------
 
 FEED_URLS = {
-    # MBTA (Boston) — well-known US feed, ~33 MB
     "mbta": "https://cdn.mbta.com/MBTA_GTFS.zip",
-    # FlixBus EU — large European feed, ~54 MB
     "flixbus": "https://gtfs.gis.flix.tech/gtfs_generic_eu.zip",
-    # De Lijn (Belgium) — ~200 MB
     "delijn": "https://gtfs.irail.be/de-lijn/de_lijn-gtfs.zip",
 }
 
 
 @pytest.fixture(scope="session")
 def feed_cache(tmp_path_factory) -> dict[str, Path]:
-    """Download GTFS feeds and cache them for the session."""
+    """Locate GTFS feeds from ``GTFS_FEED_DIR`` env var, or download them."""
+    feed_dir = os.environ.get("GTFS_FEED_DIR")
+    if feed_dir:
+        base = Path(feed_dir)
+        paths: dict[str, Path] = {}
+        for name in FEED_URLS:
+            p = base / f"{name}.zip"
+            if p.exists():
+                paths[name] = p
+                print(f"Using cached {name}: {p}")
+            else:
+                print(f"{name} not found at {p}, skipping")
+        if paths:
+            return paths
+
+    # Fallback: download into a temp dir
     import httpx
 
     cache_dir = tmp_path_factory.mktemp("gtfs_feeds")
-    paths: dict[str, Path] = {}
+    paths = {}
     for name, url in FEED_URLS.items():
         dest = cache_dir / f"{name}.zip"
         try:
@@ -42,7 +55,7 @@ def feed_cache(tmp_path_factory) -> dict[str, Path]:
         except Exception as e:
             print(f"Could not download {name}: {e}")
     if not paths:
-        pytest.skip("No GTFS feeds could be downloaded")
+        pytest.skip("No GTFS feeds available")
     return paths
 
 

@@ -22,5 +22,27 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+      - name: Cache GTFS feeds
+        uses: actions/cache@v4
+        with:
+          path: /tmp/gtfs_feeds
+          key: gtfs-feeds-v1
+      - name: Download GTFS feeds
+        run: |
+          mkdir -p /tmp/gtfs_feeds
+          download() {
+            local name=$1 url=$2
+            if [ ! -f "/tmp/gtfs_feeds/${name}.zip" ]; then
+              echo "Downloading ${name}..."
+              curl -fsSL --retry 3 --max-time 120 -o "/tmp/gtfs_feeds/${name}.zip" "$url" || echo "Failed to download ${name}"
+            else
+              echo "${name} already cached"
+            fi
+          }
+          download mbta "https://cdn.mbta.com/MBTA_GTFS.zip"
+          download flixbus "https://gtfs.gis.flix.tech/gtfs_generic_eu.zip"
+          download delijn "https://gtfs.irail.be/de-lijn/de_lijn-gtfs.zip"
       - name: Run tests
+        env:
+          GTFS_FEED_DIR: /tmp/gtfs_feeds
         run: pytest

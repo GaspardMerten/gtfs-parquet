@@ -85,13 +85,13 @@ Benchmarked on the STIB (Brussels) feed (~5.5 MB, ~9 000 trips):
 
 | Operation             | gtfs-kit (pandas) | gtfs-parquet (Polars) | Speedup |
 |-----------------------|------------------:|----------------------:|--------:|
-| Load feed             |          27.84 s  |              0.50 s   |    56×  |
-| `compute_trip_stats`  |         216.40 s  |              0.07 s   |  2919×  |
-| `compute_stop_stats`  |          52.41 s  |              0.20 s   |   264×  |
-| `compute_route_stats` |           6.76 s  |              0.11 s   |    61×  |
-| `compute_busiest_date`|           0.22 s  |              0.10 s   |     2×  |
+| Load feed             |           2.97 s  |              0.40 s   |     7×  |
+| `compute_trip_stats`  |          57.46 s  |              0.05 s   |  1149×  |
+| `compute_stop_stats`  |           9.67 s  |              0.19 s   |    51×  |
+| `compute_route_stats` |           2.12 s  |              0.08 s   |    27×  |
+| `compute_busiest_date`|           0.07 s  |              0.06 s   |     1×  |
 
-Peak memory for `compute_trip_stats`: **500 MB** (gtfs-kit) vs **< 1 MB** (gtfs-parquet).
+Peak process memory: **1020 MB** (gtfs-kit) vs **744 MB** (gtfs-parquet).
 
 ## License
 

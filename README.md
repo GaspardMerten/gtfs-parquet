@@ -57,6 +57,9 @@ in the source feed are populated.
 
 ## Operations
 
+The operations API is inspired by [gtfs-kit](https://github.com/mrcagney/gtfs_kit),
+re-implemented on Polars for significantly better performance.
+
 ```python
 from gtfs_parquet.ops import calendar, network, routes, stops, trips
 
@@ -75,6 +78,20 @@ trip_stats = trips.stats(feed)
 # Network graph analysis
 net_stats = network.stats(feed)
 ```
+
+### Performance vs gtfs-kit
+
+Benchmarked on the STIB (Brussels) feed (~5.5 MB, ~9 000 trips):
+
+| Operation             | gtfs-kit (pandas) | gtfs-parquet (Polars) | Speedup |
+|-----------------------|------------------:|----------------------:|--------:|
+| Load feed             |          27.84 s  |              0.50 s   |    56×  |
+| `compute_trip_stats`  |         216.40 s  |              0.07 s   |  2919×  |
+| `compute_stop_stats`  |          52.41 s  |              0.20 s   |   264×  |
+| `compute_route_stats` |           6.76 s  |              0.11 s   |    61×  |
+| `compute_busiest_date`|           0.22 s  |              0.10 s   |     2×  |
+
+Peak memory for `compute_trip_stats`: **500 MB** (gtfs-kit) vs **< 1 MB** (gtfs-parquet).
 
 ## License
 

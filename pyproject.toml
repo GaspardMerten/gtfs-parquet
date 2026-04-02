@@ -1,6 +1,6 @@
 [project]
 name = "gtfs-parquet"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Parse GTFS feeds to/from Parquet via Polars — fast, compact, typed."
 readme = "README.md"
 license = "MIT"
@@ -39,8 +39,14 @@ Repository = "https://github.com/GaspardMerten/gtfs-parquet"
 Issues = "https://github.com/GaspardMerten/gtfs-parquet/issues"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/gtfs_parquet/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gtfs_parquet"]

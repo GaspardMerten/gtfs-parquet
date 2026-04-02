@@ -183,7 +183,7 @@ class TestRealFeeds:
         # Types should be correct
         assert feed.stop_times["arrival_time"].dtype == pl.Duration("ms")
         if feed.stops is not None and "stop_lat" in feed.stops.columns:
-            assert feed.stops["stop_lat"].dtype == pl.Float64
+            assert feed.stops["stop_lat"].dtype == pl.Float32
 
         print(f"\n{feed_name}:")
         print(feed)

@@ -26,6 +26,8 @@ def gk():
 
 @pytest.fixture(scope="session")
 def gp_feed():
+    if not Path(ZIP_PATH).exists():
+        pytest.skip(f"{ZIP_PATH} not found")
     from gtfs_parquet import parse_gtfs_zip
     return parse_gtfs_zip(ZIP_PATH)
 

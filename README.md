@@ -38,6 +38,8 @@ feed = read_parquet("output.tar")
 write_gtfs(feed, "roundtrip.zip")
 ```
 
+Additional top-level helpers: `parse_gtfs_dir`, `parse_gtfs_zip`, `write_gtfs_dir`.
+
 ## Compression
 
 Parquet output is **significantly smaller** than the original GTFS zip thanks to
@@ -66,13 +68,19 @@ All operations are standalone functions that take a `Feed` as their first argume
 Import from the `ops` submodules:
 
 ```python
-from gtfs_parquet.ops.calendar import get_dates, get_active_services, compute_busiest_date
+from gtfs_parquet.ops.calendar import (
+    get_dates, get_first_week, get_week, get_active_services,
+    subset_dates, compute_trip_activity, compute_busiest_date,
+)
 from gtfs_parquet.ops.trips import get_trips, compute_trip_stats
-from gtfs_parquet.ops.routes import get_routes, compute_route_stats
-from gtfs_parquet.ops.stops import get_stops, compute_stop_stats
+from gtfs_parquet.ops.routes import get_routes, build_route_timetable, compute_route_stats
+from gtfs_parquet.ops.stops import (
+    get_stops, get_stop_times, get_start_and_end_times,
+    build_stop_timetable, compute_stop_activity, compute_stop_stats,
+)
 from gtfs_parquet.ops.network import describe, compute_network_stats
-from gtfs_parquet.ops.restrict import restrict_to_routes, restrict_to_dates
-from gtfs_parquet.ops.clean import clean
+from gtfs_parquet.ops.restrict import restrict_to_routes, restrict_to_dates, restrict_to_trips
+from gtfs_parquet.ops.clean import clean, clean_ids, drop_zombies
 from gtfs_parquet.ops.graph import (
     build_timetable_graph, get_service_day_counts, build_stop_lookup,
     compute_segment_frequencies, compute_connections, served_stations,

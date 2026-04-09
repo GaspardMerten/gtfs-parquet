@@ -251,6 +251,69 @@ class Feed:
         return compute_network_stats(self, dates, trip_stats, split_route_types=split_route_types)
 
     # ------------------------------------------------------------------
+    # Graph / connection operations
+    # ------------------------------------------------------------------
+
+    def build_timetable_graph(
+        self,
+        service_ids: list[str],
+        hour_filter: tuple[int, int] | None = None,
+    ) -> dict[str, list[tuple[str, float, float, str]]]:
+        """Adjacency-list timetable graph of consecutive stop pairs.
+
+        Args:
+            service_ids: Service IDs whose trips to include.
+            hour_filter: Optional ``(start_hour, end_hour)``.
+
+        Returns:
+            ``{stop_id: [(next_stop_id, dep_min, arr_min, trip_id), …]}``.
+        """
+        from gtfs_parquet.ops.graph import build_timetable_graph
+        return build_timetable_graph(self, service_ids, hour_filter)
+
+    def get_service_day_counts(self, dates: list[dt.date]) -> dict[str, int]:
+        """Count how many of *dates* each service_id is active on."""
+        from gtfs_parquet.ops.graph import get_service_day_counts
+        return get_service_day_counts(self, dates)
+
+    def build_stop_lookup(self, parent_stations: bool = True) -> dict[str, dict]:
+        """``{stop_id: info}`` lookup, optionally resolving parent stations."""
+        from gtfs_parquet.ops.graph import build_stop_lookup
+        return build_stop_lookup(self, parent_stations)
+
+    def compute_segment_frequencies(
+        self,
+        service_ids: list[str],
+        hour_filter: tuple[int, int] | None = None,
+        service_day_counts: dict[str, int] | None = None,
+    ) -> dict[tuple[str, str], float]:
+        """Average daily trips per directed stop-pair segment."""
+        from gtfs_parquet.ops.graph import compute_segment_frequencies
+        return compute_segment_frequencies(self, service_ids, hour_filter, service_day_counts)
+
+    def compute_connections(
+        self,
+        service_ids: list[str],
+        hour_filter: tuple[int, int] | None = None,
+    ) -> pl.DataFrame:
+        """Time-sorted connections for the Connection Scan Algorithm.
+
+        Returns a DataFrame with columns: *dep_min*, *dep_stop_id*,
+        *arr_min*, *arr_stop_id*, *trip_id*.
+        """
+        from gtfs_parquet.ops.graph import compute_connections
+        return compute_connections(self, service_ids, hour_filter)
+
+    def served_stations(
+        self,
+        service_ids: list[str],
+        hour_filter: tuple[int, int] | None = None,
+    ) -> set[str]:
+        """Stop/station IDs served by the given services."""
+        from gtfs_parquet.ops.graph import served_stations
+        return served_stations(self, service_ids, hour_filter)
+
+    # ------------------------------------------------------------------
     # Restriction / subsetting
     # ------------------------------------------------------------------
 

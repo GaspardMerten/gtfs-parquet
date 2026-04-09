@@ -39,6 +39,20 @@ print("=" * 70)
 print(" gtfs-parquet (Polars) — STIB 1.5M stop_times")
 print("=" * 70)
 
+from gtfs_parquet.ops.calendar import (
+    get_dates, get_first_week, get_active_services, compute_busiest_date,
+    compute_trip_activity,
+)
+from gtfs_parquet.ops.trips import get_trips, compute_trip_stats
+from gtfs_parquet.ops.routes import get_routes, build_route_timetable, compute_route_stats
+from gtfs_parquet.ops.stops import (
+    get_stops, get_stop_times, get_start_and_end_times,
+    build_stop_timetable, compute_stop_stats, compute_stop_activity,
+)
+from gtfs_parquet.ops.network import describe, compute_network_stats
+from gtfs_parquet.ops.restrict import restrict_to_routes, restrict_to_dates
+from gtfs_parquet.ops.clean import clean
+
 gp_results = []
 
 with measure("parse_gtfs_zip", gp_results):
@@ -46,69 +60,69 @@ with measure("parse_gtfs_zip", gp_results):
     gp_feed = parse_gtfs_zip(ZIP_PATH)
 
 with measure("get_dates", gp_results):
-    gp_dates = gp_feed.get_dates()
+    gp_dates = get_dates(gp_feed)
 
 with measure("get_first_week", gp_results):
-    gp_week = gp_feed.get_first_week()
+    gp_week = get_first_week(gp_feed)
 
 with measure("get_active_services", gp_results):
-    gp_services = gp_feed.get_active_services(gp_week[0])
+    gp_services = get_active_services(gp_feed, gp_week[0])
 
 with measure("compute_busiest_date (7 days)", gp_results):
-    gp_busiest = gp_feed.compute_busiest_date(gp_week)
+    gp_busiest = compute_busiest_date(gp_feed, gp_week)
 
 with measure("get_trips (date filter)", gp_results):
-    gp_trips = gp_feed.get_trips(gp_week[0])
+    gp_trips = get_trips(gp_feed, gp_week[0])
 
 with measure("compute_trip_stats", gp_results):
-    gp_trip_stats = gp_feed.compute_trip_stats()
+    gp_trip_stats = compute_trip_stats(gp_feed)
 
 with measure("get_routes (date filter)", gp_results):
-    gp_routes = gp_feed.get_routes(gp_week[0])
+    gp_routes = get_routes(gp_feed, gp_week[0])
 
 with measure("compute_route_stats (1 date)", gp_results):
-    gp_route_stats = gp_feed.compute_route_stats([gp_week[0]], gp_trip_stats)
+    gp_route_stats = compute_route_stats(gp_feed, [gp_week[0]], gp_trip_stats)
 
 with measure("get_stops (date filter)", gp_results):
-    gp_stops = gp_feed.get_stops(date=gp_week[0])
+    gp_stops = get_stops(gp_feed, date=gp_week[0])
 
 with measure("get_stop_times (date filter)", gp_results):
-    gp_st = gp_feed.get_stop_times(gp_week[0])
+    gp_st = get_stop_times(gp_feed, gp_week[0])
 
 with measure("get_start_and_end_times", gp_results):
-    gp_se = gp_feed.get_start_and_end_times(gp_week[0])
+    gp_se = get_start_and_end_times(gp_feed, gp_week[0])
 
 with measure("build_stop_timetable", gp_results):
     stop_id = gp_feed.stops["stop_id"][0]
-    gp_stop_tt = gp_feed.build_stop_timetable(stop_id, [gp_week[0]])
+    gp_stop_tt = build_stop_timetable(gp_feed, stop_id, [gp_week[0]])
 
 with measure("compute_stop_stats (1 date)", gp_results):
-    gp_stop_stats = gp_feed.compute_stop_stats([gp_week[0]])
+    gp_stop_stats = compute_stop_stats(gp_feed, [gp_week[0]])
 
 with measure("describe", gp_results):
-    gp_desc = gp_feed.describe()
+    gp_desc = describe(gp_feed)
 
 with measure("compute_network_stats (1 date)", gp_results):
-    gp_net = gp_feed.compute_network_stats([gp_week[0]], gp_trip_stats)
+    gp_net = compute_network_stats(gp_feed, [gp_week[0]], gp_trip_stats)
 
 with measure("restrict_to_routes (1 route)", gp_results):
-    gp_sub = gp_feed.restrict_to_routes(["1"])
+    gp_sub = restrict_to_routes(gp_feed, ["1"])
 
 with measure("restrict_to_dates (1 date)", gp_results):
-    gp_sub2 = gp_feed.restrict_to_dates([gp_week[0]])
+    gp_sub2 = restrict_to_dates(gp_feed, [gp_week[0]])
 
 with measure("clean", gp_results):
-    gp_cleaned = gp_feed.clean()
+    gp_cleaned = clean(gp_feed)
 
 with measure("compute_trip_activity (7 days)", gp_results):
-    gp_ta = gp_feed.compute_trip_activity(gp_week)
+    gp_ta = compute_trip_activity(gp_feed, gp_week)
 
 with measure("compute_stop_activity (7 days)", gp_results):
-    gp_sa = gp_feed.compute_stop_activity(gp_week)
+    gp_sa = compute_stop_activity(gp_feed, gp_week)
 
 with measure("build_route_timetable", gp_results):
     route_id = gp_feed.routes["route_id"][0]
-    gp_rt = gp_feed.build_route_timetable(route_id, [gp_week[0]])
+    gp_rt = build_route_timetable(gp_feed, route_id, [gp_week[0]])
 
 # ===== Print results =====
 gp_total = sum(r["time_s"] for r in gp_results)

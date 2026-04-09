@@ -152,13 +152,11 @@ class TestBuildTimetableGraph:
         graph = build_timetable_graph(feed, ["WD", "WE"])
         assert "S1" in graph
         assert "S3" in graph
-        # S3 should have WE edge (S3->S4) only; WD trips end at S3
         s3_next_stops = {e[0] for e in graph["S3"]}
         assert "S4" in s3_next_stops
 
     def test_hour_filter(self, feed):
         graph = build_timetable_graph(feed, ["WD"], hour_filter=(9, 10))
-        # Only T2 departs between 9:00-10:00
         assert set(graph.keys()) == {"S1", "S2"}
         assert len(graph["S1"]) == 1
         assert graph["S1"][0][3] == "T2"
@@ -187,7 +185,6 @@ class TestBuildTimetableGraph:
 class TestGetServiceDayCounts:
     def test_full_week(self, feed, week_dates):
         counts = get_service_day_counts(feed, week_dates)
-        # Mon-Fri = 5 weekdays, Sat-Sun = 2 weekend days
         assert counts["WD"] == 5
         assert counts["WE"] == 2
 
@@ -197,7 +194,7 @@ class TestGetServiceDayCounts:
         assert "WE" not in counts
 
     def test_single_weekend_day(self, feed):
-        counts = get_service_day_counts(feed, [dt.date(2024, 1, 6)])  # Saturday
+        counts = get_service_day_counts(feed, [dt.date(2024, 1, 6)])
         assert "WD" not in counts
         assert counts["WE"] == 1
 
@@ -217,7 +214,6 @@ class TestGetServiceDayCounts:
         assert counts == {}
 
     def test_calendar_dates_only(self):
-        """Feed with only calendar_dates (no calendar table)."""
         feed = Feed(
             calendar_dates=pl.DataFrame({
                 "service_id": ["S1", "S1", "S2"],
@@ -230,14 +226,12 @@ class TestGetServiceDayCounts:
         assert counts["S2"] == 1
 
     def test_calendar_dates_removal(self, feed):
-        """calendar_dates exception_type=2 removes a service from a date."""
         feed.calendar_dates = pl.DataFrame({
             "service_id": ["WD"],
-            "date": [dt.date(2024, 1, 1)],  # Monday — normally active
+            "date": [dt.date(2024, 1, 1)],
             "exception_type": [2],
         }).cast({"exception_type": pl.Int8})
         counts = get_service_day_counts(feed, [dt.date(2024, 1, 1), dt.date(2024, 1, 2)])
-        # WD should be active on Jan 2 (Tue) but not Jan 1 (removed)
         assert counts["WD"] == 1
 
 
@@ -248,17 +242,13 @@ class TestGetServiceDayCounts:
 class TestBuildStopLookup:
     def test_with_parent_stations(self, feed):
         lookup = build_stop_lookup(feed, parent_stations=True)
-        # S1 should have P1's coordinates
         assert lookup["S1"]["stop_lat"] == pytest.approx(42.36, abs=0.001)
         assert lookup["S1"]["stop_lon"] == pytest.approx(-71.06, abs=0.001)
-        # S2 should also have P1's coordinates
         assert lookup["S2"]["stop_lat"] == pytest.approx(42.36, abs=0.001)
-        # S3 has no parent — keeps own coords
         assert lookup["S3"]["stop_lat"] == pytest.approx(42.37, abs=0.001)
 
     def test_without_parent_stations(self, feed):
         lookup = build_stop_lookup(feed, parent_stations=False)
-        # S1 keeps its own coordinates
         assert lookup["S1"]["stop_lat"] == pytest.approx(42.3601, abs=0.0001)
 
     def test_all_stops_present(self, feed):
@@ -267,7 +257,7 @@ class TestBuildStopLookup:
 
     def test_includes_name(self, feed):
         lookup = build_stop_lookup(feed)
-        assert lookup["S1"]["stop_name"] == "Parent One"  # resolved to parent
+        assert lookup["S1"]["stop_name"] == "Parent One"
 
     def test_empty_feed(self):
         lookup = build_stop_lookup(Feed())
@@ -291,23 +281,20 @@ class TestBuildStopLookup:
 class TestComputeSegmentFrequencies:
     def test_unweighted(self, feed):
         freq = compute_segment_frequencies(feed, ["WD"])
-        # S1->S2: 2 trips (T1, T2), S2->S3: 2 trips
         assert freq[("S1", "S2")] == 2.0
         assert freq[("S2", "S3")] == 2.0
-        assert ("S3", "S4") not in freq  # WE only
+        assert ("S3", "S4") not in freq
 
     def test_weighted(self, feed, week_dates):
         counts = get_service_day_counts(feed, week_dates)
         freq = compute_segment_frequencies(feed, ["WD", "WE"], service_day_counts=counts)
-        total_days = sum(counts.values())  # 5 + 2 = 7
-        # S1->S2: 2 trips × 5 WD days / 7 total
+        total_days = sum(counts.values())
         assert freq[("S1", "S2")] == pytest.approx(2 * 5 / total_days)
-        # S3->S4: 1 trip × 2 WE days / 7 total
         assert freq[("S3", "S4")] == pytest.approx(1 * 2 / total_days)
 
     def test_hour_filter(self, feed):
         freq = compute_segment_frequencies(feed, ["WD"], hour_filter=(9, 10))
-        assert freq[("S1", "S2")] == 1.0  # only T2
+        assert freq[("S1", "S2")] == 1.0
         assert freq[("S2", "S3")] == 1.0
 
     def test_empty(self, feed):
@@ -331,9 +318,8 @@ class TestComputeConnections:
 
     def test_correct_connections(self, feed):
         conns = compute_connections(feed, ["WD"])
-        assert conns.shape[0] == 4  # 2 edges × 2 trips
+        assert conns.shape[0] == 4
         rows = conns.to_dicts()
-        # First connection: T1 S1->S2 at 480min
         assert rows[0]["dep_min"] == 480.0
         assert rows[0]["dep_stop_id"] == "S1"
         assert rows[0]["arr_min"] == 490.0
@@ -342,7 +328,7 @@ class TestComputeConnections:
 
     def test_hour_filter(self, feed):
         conns = compute_connections(feed, ["WD"], hour_filter=(9, 10))
-        assert conns.shape[0] == 2  # T2 only: 2 edges
+        assert conns.shape[0] == 2
 
     def test_empty(self, feed):
         conns = compute_connections(feed, [])
@@ -356,33 +342,24 @@ class TestComputeConnections:
 
 class TestServedStations:
     def test_resolves_parent_stations(self, feed):
-        stations = served_stations(feed, ["WD"])
-        # S1 -> P1, S2 -> P1, S3 has no parent -> S3
-        assert stations == {"P1", "S3"}
+        assert served_stations(feed, ["WD"]) == {"P1", "S3"}
 
     def test_weekend_service(self, feed):
-        stations = served_stations(feed, ["WE"])
-        # S3, S4 (no parents)
-        assert stations == {"S3", "S4"}
+        assert served_stations(feed, ["WE"]) == {"S3", "S4"}
 
     def test_both_services(self, feed):
-        stations = served_stations(feed, ["WD", "WE"])
-        assert stations == {"P1", "S3", "S4"}
+        assert served_stations(feed, ["WD", "WE"]) == {"P1", "S3", "S4"}
 
     def test_hour_filter(self, feed):
-        stations = served_stations(feed, ["WD"], hour_filter=(9, 10))
-        assert stations == {"P1", "S3"}
+        assert served_stations(feed, ["WD"], hour_filter=(9, 10)) == {"P1", "S3"}
 
     def test_empty(self, feed):
-        stations = served_stations(feed, [])
-        assert stations == set()
+        assert served_stations(feed, []) == set()
 
     def test_empty_feed(self):
-        stations = served_stations(Feed(), ["WD"])
-        assert stations == set()
+        assert served_stations(Feed(), ["WD"]) == set()
 
     def test_no_parent_station_column(self):
-        """Without parent_station column, returns raw stop_ids."""
         stops = pl.DataFrame({"stop_id": ["S1", "S2"]})
         trips = pl.DataFrame({"trip_id": ["T1"], "route_id": ["R1"], "service_id": ["WD"]})
         stop_times = pl.DataFrame({
@@ -402,7 +379,6 @@ class TestServedStations:
 
 class TestPassThroughExclusion:
     def test_passthrough_stops_excluded(self):
-        """Stops with pickup_type=1 AND drop_off_type=1 should be skipped."""
         trips = pl.DataFrame({"trip_id": ["T1"], "route_id": ["R1"], "service_id": ["WD"]})
         stop_times = pl.DataFrame({
             "trip_id": ["T1", "T1", "T1"],
@@ -422,35 +398,6 @@ class TestPassThroughExclusion:
         feed = Feed(trips=trips, stop_times=stop_times)
 
         graph = build_timetable_graph(feed, ["WD"])
-        # B is passthrough, so we should get A->C directly
         assert "A" in graph
         assert graph["A"][0][0] == "C"
         assert "B" not in graph
-
-
-# ------------------------------------------------------------------
-# Feed method wrappers
-# ------------------------------------------------------------------
-
-class TestFeedWrappers:
-    """Verify Feed method wrappers delegate correctly."""
-
-    def test_build_timetable_graph(self, feed):
-        assert feed.build_timetable_graph(["WD"]) == build_timetable_graph(feed, ["WD"])
-
-    def test_get_service_day_counts(self, feed, week_dates):
-        assert feed.get_service_day_counts(week_dates) == get_service_day_counts(feed, week_dates)
-
-    def test_build_stop_lookup(self, feed):
-        assert feed.build_stop_lookup() == build_stop_lookup(feed)
-
-    def test_compute_segment_frequencies(self, feed):
-        assert feed.compute_segment_frequencies(["WD"]) == compute_segment_frequencies(feed, ["WD"])
-
-    def test_compute_connections(self, feed):
-        a = feed.compute_connections(["WD"])
-        b = compute_connections(feed, ["WD"])
-        assert a.equals(b)
-
-    def test_served_stations(self, feed):
-        assert feed.served_stations(["WD"]) == served_stations(feed, ["WD"])

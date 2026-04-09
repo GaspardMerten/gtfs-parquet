@@ -12,6 +12,25 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from gtfs_parquet.ops.calendar import (
+    get_active_services,
+    get_dates,
+    get_first_week,
+    compute_busiest_date,
+    compute_trip_activity,
+)
+from gtfs_parquet.ops.trips import get_trips, compute_trip_stats
+from gtfs_parquet.ops.routes import get_routes, build_route_timetable, compute_route_stats
+from gtfs_parquet.ops.stops import (
+    get_stops,
+    get_stop_times,
+    get_start_and_end_times,
+    compute_stop_activity,
+    compute_stop_stats,
+)
+from gtfs_parquet.ops.network import describe
+from gtfs_parquet.ops.restrict import restrict_to_routes, restrict_to_dates
+
 ZIP_PATH = "/tmp/stib_gtfs.zip"
 CACHE_PATH = Path("/tmp/gk_cache.pkl")
 
@@ -34,12 +53,12 @@ def gp_feed():
 
 @pytest.fixture(scope="session")
 def gp_week(gp_feed):
-    return gp_feed.get_first_week()
+    return get_first_week(gp_feed)
 
 
 @pytest.fixture(scope="session")
 def gp_trip_stats(gp_feed):
-    return gp_feed.compute_trip_stats()
+    return compute_trip_stats(gp_feed)
 
 
 def gk_date_to_dt(d: str) -> dt.date:
@@ -60,25 +79,25 @@ def dur_to_timestr(d) -> str | None:
 
 # Calendar
 def test_get_dates(gp_feed, gk):
-    assert gp_feed.get_dates() == [gk_date_to_dt(d) for d in gk["dates"]]
+    assert get_dates(gp_feed) == [gk_date_to_dt(d) for d in gk["dates"]]
 
 def test_get_first_week(gp_feed, gk):
-    assert gp_feed.get_first_week() == [gk_date_to_dt(d) for d in gk["first_week"]]
+    assert get_first_week(gp_feed) == [gk_date_to_dt(d) for d in gk["first_week"]]
 
 def test_get_active_services(gp_feed, gp_week, gk):
     for gp_d in gp_week:
-        assert gp_feed.get_active_services(gp_d) == gk["active_services"][dt_to_gk_date(gp_d)]
+        assert get_active_services(gp_feed, gp_d) == gk["active_services"][dt_to_gk_date(gp_d)]
 
 def test_compute_busiest_date(gp_feed, gp_week, gk):
-    assert gp_feed.compute_busiest_date(gp_week) == gk_date_to_dt(gk["busiest_date"])
+    assert compute_busiest_date(gp_feed, gp_week) == gk_date_to_dt(gk["busiest_date"])
 
 
 # Trips
 def test_get_trips_date_filter(gp_feed, gp_week, gk):
-    assert sorted(gp_feed.get_trips(gp_week[0])["trip_id"].to_list()) == gk["trip_ids_date0"]
+    assert sorted(get_trips(gp_feed, gp_week[0])["trip_id"].to_list()) == gk["trip_ids_date0"]
 
 def test_compute_trip_activity(gp_feed, gp_week, gk):
-    gp_ta = gp_feed.compute_trip_activity(gp_week).sort("trip_id")
+    gp_ta = compute_trip_activity(gp_feed, gp_week).sort("trip_id")
     gk_ta = gk["trip_activity"]
     assert gp_ta["trip_id"].to_list() == gk_ta["trip_id"].tolist()
     for gp_d in gp_week:
@@ -112,18 +131,18 @@ def test_compute_trip_stats_duration(gp_trip_stats, gk):
 
 # Routes
 def test_get_routes_date_filter(gp_feed, gp_week, gk):
-    assert sorted(gp_feed.get_routes(gp_week[0])["route_id"].to_list()) == sorted(gk["route_ids_date0"])
+    assert sorted(get_routes(gp_feed, gp_week[0])["route_id"].to_list()) == sorted(gk["route_ids_date0"])
 
 def test_build_route_timetable(gp_feed, gp_week, gk):
-    gp_tt = gp_feed.build_route_timetable(gk["route_id_0"], [gp_week[0]])
+    gp_tt = build_route_timetable(gp_feed, gk["route_id_0"], [gp_week[0]])
     assert gp_tt.shape[0] == gk["route_timetable_rows"]
 
 def test_compute_route_stats_ids(gp_feed, gp_week, gp_trip_stats, gk):
-    gp_rs = gp_feed.compute_route_stats([gp_week[0]], gp_trip_stats)
+    gp_rs = compute_route_stats(gp_feed, [gp_week[0]], gp_trip_stats)
     assert sorted(gp_rs["route_id"].to_list()) == sorted(gk["route_stats"]["route_id"].tolist())
 
 def test_compute_route_stats_num_trips(gp_feed, gp_week, gp_trip_stats, gk):
-    gp_rs = gp_feed.compute_route_stats([gp_week[0]], gp_trip_stats).sort("route_id")
+    gp_rs = compute_route_stats(gp_feed, [gp_week[0]], gp_trip_stats).sort("route_id")
     gk_rs = gk["route_stats"]
     gp_trips = dict(zip(gp_rs["route_id"].to_list(), gp_rs["num_trips"].to_list()))
     gk_trips = dict(zip(gk_rs["route_id"].tolist(), gk_rs["num_trips"].tolist()))
@@ -133,25 +152,25 @@ def test_compute_route_stats_num_trips(gp_feed, gp_week, gp_trip_stats, gk):
 
 # Stops
 def test_get_stops_date_filter(gp_feed, gp_week, gk):
-    assert sorted(gp_feed.get_stops(date=gp_week[0])["stop_id"].to_list()) == sorted(gk["stop_ids_date0"])
+    assert sorted(get_stops(gp_feed, date=gp_week[0])["stop_id"].to_list()) == sorted(gk["stop_ids_date0"])
 
 def test_get_stop_times_date_filter(gp_feed, gp_week, gk):
-    assert gp_feed.get_stop_times(gp_week[0]).shape[0] == gk["stop_times_rows_date0"]
+    assert get_stop_times(gp_feed, gp_week[0]).shape[0] == gk["stop_times_rows_date0"]
 
 def test_get_start_and_end_times(gp_feed, gp_week, gk):
-    gp_start, gp_end = gp_feed.get_start_and_end_times(gp_week[0])
+    gp_start, gp_end = get_start_and_end_times(gp_feed, gp_week[0])
     assert gp_start == gk["start_time_s"]
     assert gp_end == gk["end_time_s"]
 
 def test_compute_stop_activity(gp_feed, gp_week, gk):
-    gp_sa = gp_feed.compute_stop_activity(gp_week).sort("stop_id")
+    gp_sa = compute_stop_activity(gp_feed, gp_week).sort("stop_id")
     gk_sa = gk["stop_activity"]
     assert gp_sa["stop_id"].to_list() == gk_sa["stop_id"].tolist()
     for gp_d in gp_week:
         assert gp_sa[gp_d.isoformat()].to_list() == gk_sa[dt_to_gk_date(gp_d)].tolist()
 
 def test_compute_stop_stats_num_trips(gp_feed, gp_week, gk):
-    gp_ss = gp_feed.compute_stop_stats([gp_week[0]]).sort("stop_id")
+    gp_ss = compute_stop_stats(gp_feed, [gp_week[0]]).sort("stop_id")
     gk_ss = gk["stop_stats"]
     gp_trips = dict(zip(gp_ss["stop_id"].to_list(), gp_ss["num_trips"].to_list()))
     gk_trips = dict(zip(gk_ss["stop_id"].tolist(), gk_ss["num_trips"].tolist()))
@@ -162,7 +181,7 @@ def test_compute_stop_stats_num_trips(gp_feed, gp_week, gk):
 
 # Describe
 def test_describe_counts(gp_feed, gk):
-    gp_desc = gp_feed.describe()
+    gp_desc = describe(gp_feed)
     gp_dict = dict(zip(gp_desc["indicator"].to_list(), gp_desc["value"].to_list()))
     gk_dict = gk["describe"]
     assert int(gp_dict["num_routes"]) == gk_dict["num_routes"]
@@ -172,13 +191,13 @@ def test_describe_counts(gp_feed, gk):
 
 # Restriction
 def test_restrict_to_routes_trips(gp_feed, gk):
-    gp_sub = gp_feed.restrict_to_routes([gk["route_id_0"]])
+    gp_sub = restrict_to_routes(gp_feed, [gk["route_id_0"]])
     assert sorted(gp_sub.trips["trip_id"].to_list()) == gk["restrict_routes_trip_ids"]
 
 def test_restrict_to_routes_stops(gp_feed, gk):
-    gp_sub = gp_feed.restrict_to_routes([gk["route_id_0"]])
+    gp_sub = restrict_to_routes(gp_feed, [gk["route_id_0"]])
     assert sorted(gp_sub.stops["stop_id"].to_list()) == gk["restrict_routes_stop_ids"]
 
 def test_restrict_to_dates(gp_feed, gp_week, gk):
-    gp_sub = gp_feed.restrict_to_dates([gp_week[0]])
+    gp_sub = restrict_to_dates(gp_feed, [gp_week[0]])
     assert sorted(gp_sub.trips["trip_id"].to_list()) == gk["restrict_dates_trip_ids"]

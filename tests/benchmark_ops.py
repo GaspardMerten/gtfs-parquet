@@ -4,6 +4,11 @@ import gc
 import time
 import tracemalloc
 
+from gtfs_parquet.ops.calendar import get_dates, get_first_week, compute_busiest_date
+from gtfs_parquet.ops.trips import compute_trip_stats
+from gtfs_parquet.ops.routes import compute_route_stats
+from gtfs_parquet.ops.stops import compute_stop_stats
+
 PATH = "/tmp/stib_gtfs.zip"
 
 results = {}
@@ -45,13 +50,13 @@ from gtfs_parquet import parse_gtfs
 
 tracemalloc.start()
 gp_feed = bench("load", lambda: parse_gtfs(PATH))
-gp_dates = bench("get_dates", lambda: gp_feed.get_dates())
-bench("get_first_week", lambda: gp_feed.get_first_week())
-bench("compute_busiest_date", lambda: gp_feed.compute_busiest_date(gp_dates))
-gp_ts = bench("compute_trip_stats", lambda: gp_feed.compute_trip_stats())
-gp_week = gp_feed.get_first_week()
-bench("compute_route_stats", lambda: gp_feed.compute_route_stats(gp_week))
-bench("compute_stop_stats", lambda: gp_feed.compute_stop_stats(gp_week))
+gp_dates = bench("get_dates", lambda: get_dates(gp_feed))
+bench("get_first_week", lambda: get_first_week(gp_feed))
+bench("compute_busiest_date", lambda: compute_busiest_date(gp_feed, gp_dates))
+gp_ts = bench("compute_trip_stats", lambda: compute_trip_stats(gp_feed))
+gp_week = get_first_week(gp_feed)
+bench("compute_route_stats", lambda: compute_route_stats(gp_feed, gp_week))
+bench("compute_stop_stats", lambda: compute_stop_stats(gp_feed, gp_week))
 tracemalloc.stop()
 
 gp_results = dict(results)

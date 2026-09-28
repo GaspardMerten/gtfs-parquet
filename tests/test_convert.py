@@ -126,6 +126,17 @@ def test_cr_only_line_endings(tmp_path: Path):
     assert "trip_id" in stop_times.columns
 
 
+def test_extended_route_types(tmp_path: Path):
+    files = dict(FILES)
+    files["routes.txt"] = "route_id,agency_id,route_short_name,route_type\nR1,A1,1,3\nR2,A1,2,700\nR3,A1,3,1501\nR4,A1,4,109\n"
+    path = _zip(tmp_path, files)
+    for routes in (
+        pl.read_parquet(convert_gtfs_zip(path, tmp_path / "out")["routes"]),
+        parse_gtfs_zip(path).routes,
+    ):
+        assert routes["route_type"].to_list() == [3, 700, 1501, 109]
+
+
 def test_last_row_end():
     assert _last_row_end(b"a,b\nc,d") == 4
     assert _last_row_end(b'a,"b\nc",d\ne') == 10

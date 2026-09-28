@@ -105,7 +105,8 @@ ROUTES = GtfsFileSchema(
         "route_short_name": _STR,
         "route_long_name": _STR,
         "route_desc": _STR,
-        "route_type": _ENUM,
+        # Extended route types go up to 1700: too large for _ENUM (Int8)
+        "route_type": pl.Int16,
         "route_url": _STR,
         "route_color": _STR,
         "route_text_color": _STR,

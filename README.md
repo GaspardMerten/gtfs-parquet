@@ -54,8 +54,11 @@ from gtfs_parquet import convert_gtfs_zip
 paths = convert_gtfs_zip("gtfs.zip", "output/")   # {"stops": Path("output/stops.parquet"), ...}
 ```
 
-Tables are converted one at a time, and large files are read in 16 MB blocks.
-Rows keep the order of the source file (`sort=True` sorts them).
+Tables are converted one at a time, and large files are read in 16 MB blocks,
+stored as temporary Parquet files in `out_dir` until the table is written.
+Rows keep the order of the source file (`sort=True` sorts them). A file with an
+unescaped quote (`12" Street` outside quotes) raises a `ValueError` instead of
+being read whole.
 
 | German national feed (298 MB zip, 40M stop times) | Peak RAM | Parquet |
 |---------------------------------------------------|----------|---------|

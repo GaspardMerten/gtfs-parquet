@@ -73,10 +73,14 @@ def convert_gtfs_zip(
                     parts = []
                     for i, block in enumerate(_csv_blocks(raw, block_bytes)):
                         part = Path(tmp) / f"{i:06}.parquet"
+                        # Light compression: the parts are only read back once,
+                        # but they can take disk space (or RAM, on tmpfs)
                         _read_block(block, schema, sort).write_parquet(
-                            part, compression="uncompressed"
+                            part, compression="zstd", compression_level=1
                         )
                         parts.append(part)
+                    if not parts:
+                        raise ValueError(f"No rows could be read from {schema.file_name}")
                     pl.scan_parquet(parts).sink_parquet(
                         out, compression=compression, compression_level=compression_level
                     )
@@ -106,28 +110,54 @@ def _csv_blocks(raw: IO[bytes], block_bytes: int) -> Iterator[bytes]:
 
     A block ends at a line break that is not inside a quoted field: CSV escapes
     a quote by doubling it, so a line break is outside quotes when the text
-    before it holds an even number of quote characters.
+    before it holds an even number of quote characters. Files that use only
+    "\r" as line break are read as if it were "\n".
     """
-    header = _strip_bom(raw.readline())
-    if not header.endswith(b"\n"):
-        header += b"\n"
-    pending = b""
+    # Read enough to hold the header line and tell the line break style
+    first = raw.read(max(block_bytes, 1 << 16))
+    cr_only = b"\n" not in first and b"\r" in first
+    first = _normalize(first, cr_only)
+    while b"\n" not in first:
+        more = _normalize(raw.read(block_bytes), cr_only)
+        if not more:
+            break
+        first += more
+    header, _, pending = first.partition(b"\n")
+    header = _strip_bom(header) + b"\n"
+    inside = pending.count(b'"') % 2 == 1  # quote state at the end of pending
     while True:
-        data = raw.read(block_bytes)
-        pending += data
+        data = _normalize(raw.read(block_bytes), cr_only)
         if not data:
             if pending.strip():
                 yield header + pending
             return
-        cut = _last_row_end(pending)
+        pending += data
+        inside ^= data.count(b'"') % 2 == 1
+        cut = _last_row_end(pending, inside)
         if cut:
             yield header + pending[:cut]
+            inside ^= pending.count(b'"', 0, cut) % 2 == 1
             pending = pending[cut:]
+        elif len(pending) > 4 * block_bytes:
+            # An unescaped quote in an unquoted field leaves every later line
+            # break "inside quotes": fail instead of reading the rest in memory
+            raise ValueError(
+                "Malformed CSV: no row end found outside quotes in "
+                f"{len(pending) // (1 << 20)} MB, probably an unescaped quote"
+            )
 
 
-def _last_row_end(data: bytes) -> int:
-    """Index just after the last line break outside quotes, or 0 if none."""
-    inside = data.count(b'"') % 2 == 1  # state at the end of data
+def _normalize(data: bytes, cr_only: bool) -> bytes:
+    return data.replace(b"\r", b"\n") if cr_only else data
+
+
+def _last_row_end(data: bytes, inside: bool | None = None) -> int:
+    """Index just after the last line break outside quotes, or 0 if none.
+
+    *inside* is the quote state at the end of *data*; computed if not given.
+    """
+    if inside is None:
+        inside = data.count(b'"') % 2 == 1
     end = len(data)
     while True:
         newline = data.rfind(b"\n", 0, end)

@@ -5,7 +5,7 @@ Parse [GTFS](https://gtfs.org/) feeds to/from [Parquet](https://parquet.apache.o
 ## Features
 
 - Parse GTFS from **zip**, **directory**, or **URL**
-- Write to **Parquet** (zstd-compressed, sorted for optimal compression) or back to **GTFS**
+- Write to **Parquet** (zstd-compressed) or back to **GTFS**
 - Strongly typed schemas with optimised dtypes (Float32 coords, Int16 sequences)
 - Built on Polars — zero-copy reads, lazy evaluation ready
 - Operations: calendar expansion, network analysis, route/stop/trip stats, timetable graphs, CSA connections
@@ -44,8 +44,7 @@ Additional top-level helpers: `parse_gtfs_dir`, `parse_gtfs_zip`, `write_gtfs_di
 
 ## Large feeds
 
-`parse_gtfs_zip` loads the whole feed in memory, and `write_parquet` sorts each table
-before writing it. For a national feed that takes several GB of RAM. When you only
+`parse_gtfs_zip` loads the whole feed in memory. For a national feed that takes several GB of RAM. When you only
 need the Parquet files, `convert_gtfs_zip` streams the conversion instead:
 
 ```python
@@ -72,13 +71,16 @@ CPU cores: set `POLARS_MAX_THREADS` before importing Polars to limit it.
 ## Compression
 
 Parquet output is **significantly smaller** than the original GTFS zip thanks to
-zstd compression, sorted row groups, and optimised column types:
+zstd compression and optimised column types:
 
-| Feed     | GTFS zip | Parquet |  Saving |
-|----------|----------|---------|---------|
-| STIB     |  5.5 MB  |  3.2 MB |  42.8 % |
-| TEC      | 95.2 MB  | 23.9 MB |  75.0 % |
-| De Lijn  | 195 MB   | 55.0 MB |  71.8 % |
+| Feed               | GTFS zip | Parquet | Sorted (`sort=True`) |
+|--------------------|----------|---------|----------------------|
+| MBTA               |  24.8 MB |  8.3 MB |   8.3 MB             |
+| FlixBus (EU)       |  30.6 MB | 13.5 MB |  16.3 MB             |
+| Germany (national) | 298.2 MB |  119 MB |   320 MB             |
+
+Since 0.6.0, rows keep the order of the source files by default: feeds usually
+list related rows together, and sorting by id often breaks that up.
 
 ## Feed object
 

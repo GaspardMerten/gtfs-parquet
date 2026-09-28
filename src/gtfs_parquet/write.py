@@ -18,10 +18,12 @@ from gtfs_parquet.schema import ALL_SCHEMAS, GtfsFileSchema, date_columns, time_
 # ---------------------------------------------------------------------------
 
 
-def _prepare_table(name: str, df: pl.DataFrame, compression: str, compression_level: int) -> bytes:
-    """Sort a table by its schema sort keys and serialise to Parquet bytes."""
+def _prepare_table(
+    name: str, df: pl.DataFrame, compression: str, compression_level: int, sort: bool
+) -> bytes:
+    """Serialise a table to Parquet bytes, sorted by its schema sort keys if *sort*."""
     schema = ALL_SCHEMAS.get(name)
-    if schema and schema.sort_keys:
+    if sort and schema and schema.sort_keys:
         keys = [k for k in schema.sort_keys if k in df.columns]
         if keys:
             df = df.sort(keys)
@@ -36,6 +38,7 @@ def write_parquet(
     *,
     compression: str = "zstd",
     compression_level: int = 9,
+    sort: bool = False,
 ) -> None:
     """Write all Feed tables as Parquet.
 
@@ -47,14 +50,17 @@ def write_parquet(
     * **``.tar``** — a tar archive of ``.parquet`` files (no extra
       compression, single-file distribution).
 
-    Tables are sorted by their schema's
-    :attr:`~gtfs_parquet.schema.GtfsFileSchema.sort_keys` before writing.
+    Rows keep their order, which usually compresses as well as or better than
+    sorting. With ``sort=True``, tables are sorted by their schema's
+    :attr:`~gtfs_parquet.schema.GtfsFileSchema.sort_keys` before writing
+    (the default before 0.6.0).
 
     Args:
         feed: The feed to write.
         path: Output path (directory, ``.zip``, or ``.tar``).
         compression: Parquet compression codec.
         compression_level: Compression level for the chosen codec.
+        sort: Sort rows by the schema's sort keys.
     """
     path = Path(path)
     suffix = path.suffix.lower()
@@ -62,13 +68,13 @@ def write_parquet(
     if suffix == ".zip":
         with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED) as zf:
             for name, df in feed.tables().items():
-                data = _prepare_table(name, df, compression, compression_level)
+                data = _prepare_table(name, df, compression, compression_level, sort)
                 zf.writestr(f"{name}.parquet", data)
 
     elif suffix == ".tar":
         with tarfile.open(path, "w") as tf:
             for name, df in feed.tables().items():
-                data = _prepare_table(name, df, compression, compression_level)
+                data = _prepare_table(name, df, compression, compression_level, sort)
                 info = tarfile.TarInfo(name=f"{name}.parquet")
                 info.size = len(data)
                 tf.addfile(info, io.BytesIO(data))
@@ -77,7 +83,7 @@ def write_parquet(
         # Default: directory of parquet files.
         path.mkdir(parents=True, exist_ok=True)
         for name, df in feed.tables().items():
-            data = _prepare_table(name, df, compression, compression_level)
+            data = _prepare_table(name, df, compression, compression_level, sort)
             (path / f"{name}.parquet").write_bytes(data)
 
 
@@ -86,22 +92,24 @@ def to_parquet_bytes(
     *,
     compression: str = "zstd",
     compression_level: int = 9,
+    sort: bool = False,
 ) -> dict[str, bytes]:
     """Serialise each Feed table to Parquet bytes, without touching the disk.
 
-    Useful to upload tables to object storage. Tables are sorted like in
+    Useful to upload tables to object storage. Same output as
     :func:`write_parquet`.
 
     Args:
         feed: The feed to serialise.
         compression: Parquet compression codec.
         compression_level: Compression level for the chosen codec.
+        sort: Sort rows by the schema's sort keys.
 
     Returns:
         A dict mapping each table name (e.g. ``"stops"``) to its Parquet bytes.
     """
     return {
-        name: _prepare_table(name, df, compression, compression_level)
+        name: _prepare_table(name, df, compression, compression_level, sort)
         for name, df in feed.tables().items()
     }
 

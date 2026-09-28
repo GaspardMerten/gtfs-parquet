@@ -8,7 +8,15 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gtfs_parquet import Feed, parse_gtfs, parse_gtfs_zip, read_parquet, write_gtfs, write_parquet
+from gtfs_parquet import (
+    Feed,
+    parse_gtfs,
+    parse_gtfs_zip,
+    read_parquet,
+    to_parquet_bytes,
+    write_gtfs,
+    write_parquet,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +149,18 @@ class TestSyntheticRoundtrip:
             df2 = feed2.tables()[name]
             assert df.shape == df2.shape, f"{name} shape mismatch"
             assert df.columns == df2.columns, f"{name} columns mismatch"
+
+    def test_to_parquet_bytes(self, tmp_path: Path):
+        d = self._make_synthetic_gtfs_dir(tmp_path)
+        feed = parse_gtfs(d)
+
+        tables = to_parquet_bytes(feed)
+        assert set(tables) == set(feed.tables())
+
+        pq_dir = tmp_path / "parquet_out"
+        write_parquet(feed, pq_dir)
+        for name, data in tables.items():
+            assert data == (pq_dir / f"{name}.parquet").read_bytes()
 
     def test_gtfs_roundtrip(self, tmp_path: Path):
         d = self._make_synthetic_gtfs_dir(tmp_path)

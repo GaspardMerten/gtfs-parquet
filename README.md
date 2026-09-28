@@ -38,7 +38,9 @@ feed = read_parquet("output.tar")
 write_gtfs(feed, "roundtrip.zip")
 ```
 
-Additional top-level helpers: `parse_gtfs_dir`, `parse_gtfs_zip`, `write_gtfs_dir`.
+Additional top-level helpers: `parse_gtfs_dir`, `parse_gtfs_zip`, `write_gtfs_dir`, and
+`to_parquet_bytes(feed)`, which returns `{table_name: parquet_bytes}` without writing to disk
+(handy for uploading to object storage).
 
 ## Compression
 

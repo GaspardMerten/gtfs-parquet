@@ -81,6 +81,31 @@ def write_parquet(
             (path / f"{name}.parquet").write_bytes(data)
 
 
+def to_parquet_bytes(
+    feed: Feed,
+    *,
+    compression: str = "zstd",
+    compression_level: int = 9,
+) -> dict[str, bytes]:
+    """Serialise each Feed table to Parquet bytes, without touching the disk.
+
+    Useful to upload tables to object storage. Tables are sorted like in
+    :func:`write_parquet`.
+
+    Args:
+        feed: The feed to serialise.
+        compression: Parquet compression codec.
+        compression_level: Compression level for the chosen codec.
+
+    Returns:
+        A dict mapping each table name (e.g. ``"stops"``) to its Parquet bytes.
+    """
+    return {
+        name: _prepare_table(name, df, compression, compression_level)
+        for name, df in feed.tables().items()
+    }
+
+
 def read_parquet(path: str | Path) -> Feed:
     """Read Parquet tables back into a Feed.
 

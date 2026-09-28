@@ -5,6 +5,7 @@ with Parquet output for compact storage and fast reads.
 """
 
 from gtfs_parquet._version import __version__
+from gtfs_parquet.convert import convert_gtfs_zip
 from gtfs_parquet.feed import Feed
 from gtfs_parquet.parse import parse_gtfs, parse_gtfs_dir, parse_gtfs_zip
 from gtfs_parquet.write import (
@@ -17,6 +18,7 @@ from gtfs_parquet.write import (
 
 __all__ = [
     "__version__",
+    "convert_gtfs_zip",
     "Feed",
     "parse_gtfs",
     "parse_gtfs_dir",

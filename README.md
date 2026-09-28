@@ -42,6 +42,30 @@ Additional top-level helpers: `parse_gtfs_dir`, `parse_gtfs_zip`, `write_gtfs_di
 `to_parquet_bytes(feed)`, which returns `{table_name: parquet_bytes}` without writing to disk
 (handy for uploading to object storage).
 
+## Large feeds
+
+`parse_gtfs_zip` loads the whole feed in memory, and `write_parquet` sorts each table
+before writing it. For a national feed that takes several GB of RAM. When you only
+need the Parquet files, `convert_gtfs_zip` streams the conversion instead:
+
+```python
+from gtfs_parquet import convert_gtfs_zip
+
+paths = convert_gtfs_zip("gtfs.zip", "output/")   # {"stops": Path("output/stops.parquet"), ...}
+```
+
+Tables are converted one at a time, and large files are read in 16 MB blocks.
+Rows keep the order of the source file (`sort=True` sorts them).
+
+| German national feed (298 MB zip, 40M stop times) | Peak RAM | Parquet |
+|---------------------------------------------------|----------|---------|
+| `parse_gtfs_zip` + `write_parquet`                  | 10.7 GB  |  320 MB |
+| `convert_gtfs_zip`, all 20 threads                  |  1.6 GB  |  120 MB |
+| `convert_gtfs_zip`, `POLARS_MAX_THREADS=4`           |  0.5 GB  |  120 MB |
+
+Memory grows with the number of Polars threads, which defaults to the number of
+CPU cores: set `POLARS_MAX_THREADS` before importing Polars to limit it.
+
 ## Compression
 
 Parquet output is **significantly smaller** than the original GTFS zip thanks to

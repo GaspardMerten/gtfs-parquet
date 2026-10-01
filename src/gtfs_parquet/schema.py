@@ -29,8 +29,9 @@ _LAT = pl.Float32
 _LON = pl.Float32
 # Distances in meters/km: Float32 gives ~7 significant digits — plenty.
 _DIST = pl.Float32
-# Stop sequences rarely exceed a few hundred.
-_SEQ = pl.Int16
+# Stop sequences only need to increase along a trip, and some feeds number in steps (MÁV, Hungary, ends
+# trips at 99990): Int16 turned those into nulls.
+_SEQ = pl.Int32
 
 
 @dataclass(frozen=True)

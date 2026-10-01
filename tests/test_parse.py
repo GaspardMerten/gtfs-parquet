@@ -107,6 +107,16 @@ class TestSyntheticRoundtrip:
         )
         return d
 
+    def test_large_stop_sequence_kept(self, tmp_path: Path):
+        d = self._make_synthetic_gtfs_dir(tmp_path)
+        (d / "stop_times.txt").write_text(
+            "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+            "T1,08:00:00,08:00:00,S1,10\n"
+            "T1,08:10:00,08:10:00,S2,99990\n"
+        )
+        feed = parse_gtfs(d)
+        assert feed.stop_times["stop_sequence"].to_list() == [10, 99990]
+
     def test_parse_dir(self, tmp_path: Path):
         d = self._make_synthetic_gtfs_dir(tmp_path)
         feed = parse_gtfs(d)

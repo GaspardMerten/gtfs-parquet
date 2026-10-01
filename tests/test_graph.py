@@ -79,7 +79,7 @@ def feed() -> Feed:
         "pickup_type": [0, 0, 0, 0, 0, 0, 0, 0],
         "drop_off_type": [0, 0, 0, 0, 0, 0, 0, 0],
     }).cast({
-        "stop_sequence": pl.Int16,
+        "stop_sequence": pl.Int32,
         "arrival_time": pl.Duration("ms"),
         "departure_time": pl.Duration("ms"),
         "pickup_type": pl.Int8,
@@ -368,7 +368,7 @@ class TestServedStations:
             "stop_sequence": [1, 2],
             "departure_time": [_ms(8), _ms(9)],
             "arrival_time": [_ms(8), _ms(9)],
-        }).cast({"stop_sequence": pl.Int16, "departure_time": pl.Duration("ms"), "arrival_time": pl.Duration("ms")})
+        }).cast({"stop_sequence": pl.Int32, "departure_time": pl.Duration("ms"), "arrival_time": pl.Duration("ms")})
         feed = Feed(stops=stops, trips=trips, stop_times=stop_times)
         assert served_stations(feed, ["WD"]) == {"S1", "S2"}
 
@@ -389,7 +389,7 @@ class TestPassThroughExclusion:
             "pickup_type": [0, 1, 0],
             "drop_off_type": [0, 1, 0],
         }).cast({
-            "stop_sequence": pl.Int16,
+            "stop_sequence": pl.Int32,
             "departure_time": pl.Duration("ms"),
             "arrival_time": pl.Duration("ms"),
             "pickup_type": pl.Int8,

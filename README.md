@@ -5,6 +5,7 @@ Parse [GTFS](https://gtfs.org/) feeds to/from [Parquet](https://parquet.apache.o
 ## Features
 
 - Parse GTFS from **zip**, **directory**, or **URL**
+- Read **NeTEx** timetables (European profile) as the same GTFS tables
 - Write to **Parquet** (zstd-compressed) or back to **GTFS**
 - Strongly typed schemas with optimised dtypes (Float32 coords, Int16 sequences)
 - Built on Polars — zero-copy reads, lazy evaluation ready
@@ -67,6 +68,32 @@ being read whole.
 
 Memory grows with the number of Polars threads, which defaults to the number of
 CPU cores: set `POLARS_MAX_THREADS` before importing Polars to limit it.
+
+## NeTEx
+
+Some operators publish their timetable only in [NeTEx](https://netex-cen.eu/), the European XML format.
+`parse_netex` reads it as GTFS tables, typed like a parsed GTFS feed; `convert_netex` writes them as Parquet,
+the same files `convert_gtfs_zip` writes:
+
+```python
+from gtfs_parquet import convert_netex, parse_netex
+
+feed = parse_netex("IT-IT-TRENITALIA_L1.xml.gz")   # .xml, .xml.gz, or a .zip of XML files
+paths = convert_netex("IT-IT-TRENITALIA_L1.xml.gz", "output/")
+```
+
+| NeTEx | GTFS |
+|-------|------|
+| `Operator` / `Authority` | agency |
+| `StopPlace`, its `Quay`s | stops: stations and their stops |
+| `Line` (`TransportMode`) | routes (basic `route_type`) |
+| `ServiceJourney` (`Name`) | trips (`trip_short_name`) |
+| `TimetabledPassingTime` | stop_times, day offsets as times past 24:00 |
+| `DayType`, `DayTypeAssignment`, `OperatingPeriod` / `UicOperatingPeriod` | calendar_dates, one service per set of dates |
+| `ServiceLink` geometry along the journey pattern | shapes |
+
+The file is read in one streaming pass. Trenitalia's timetable (302 MB of XML, 16,675 journeys) converts in
+about 10 seconds with 0.6 GB of RAM.
 
 ## Compression
 
